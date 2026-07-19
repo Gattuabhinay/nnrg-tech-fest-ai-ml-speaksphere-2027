@@ -15,6 +15,7 @@ import {
   getWhatsAppRedirect,
   heroFeeLabelFromAmount,
   openWhatsApp,
+  REGISTER_ACCESS_TOKEN,
   REGISTER_ENDPOINT,
   teamLabelFromMembers,
   type SupabaseEventConfig,
@@ -204,6 +205,8 @@ function App() {
   const [whatsappConfirmUrl, setWhatsappConfirmUrl] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const whatsappConfirmRef = useRef<HTMLDivElement>(null);
+  const honeypotRef = useRef<HTMLInputElement>(null);
+  const formOpenedAtRef = useRef<number>(Date.now());
 
   const displayCollege = useMemo(() => (form.college === "Other" ? form.otherCollege : form.college), [form.college, form.otherCollege]);
   const displayDepartment = useMemo(() => (form.department === "Other" ? form.otherDepartment : form.department), [form.department, form.otherDepartment]);
@@ -226,6 +229,7 @@ function App() {
     ? heroFeeLabelFromAmount(displayFee, minMembers, maxMembers, `₹${displayFee}`)
     : PLAIN;
   const festYear = eventData?.fest_year ?? 2027;
+  const registrationsOpen = eventData?.registrations_open === true;
   const payment = getPaymentDetails(eventData, event.fee);
   const qrUrl =
     payment.upiId && payment.upiName
@@ -243,6 +247,7 @@ function App() {
   const eventResource = getEventResource(eventData, event.name, festYear);
 
   useEffect(() => {
+    formOpenedAtRef.current = Date.now();
     let active = true;
     fetchEventConfig(event.slug).then((config) => {
       if (active) setEventData(config);
@@ -272,6 +277,9 @@ function App() {
     if (form.college === "Other" && !form.otherCollege.trim()) nextErrors.otherCollege = "Enter your college name";
     if (!form.fullName.trim()) nextErrors.fullName = "Full name is required";
     if (!form.rollNumber.trim()) nextErrors.rollNumber = "Roll number is required";
+    else if (!/^[0-9]{2}[A-Z0-9]{1,6}1A[0-9A-Z]{3,6}$/i.test(form.rollNumber.trim()) && !/^[0-9]{2}R21A[0-9]{4}$/i.test(form.rollNumber.trim())) {
+      nextErrors.rollNumber = "Enter your real NNRG roll number (e.g. 227Z1A0587)";
+    }
     if (!form.department) nextErrors.department = "Department is required";
     if (form.department === "Other" && !form.otherDepartment.trim()) nextErrors.otherDepartment = "Enter your department";
     if (!form.year) nextErrors.year = "Year is required";
@@ -304,6 +312,11 @@ function App() {
 
   async function handleSubmit(submitEvent: FormEvent<HTMLFormElement>) {
     submitEvent.preventDefault();
+    if (!registrationsOpen) {
+      setErrors({ transactionId: "Registrations are not open yet. Please wait for the official college announcement." });
+      formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
     const nextErrors = validate();
     if (Object.keys(nextErrors).length) {
       setErrors(nextErrors);
@@ -361,6 +374,9 @@ function App() {
             event_focus: event.name,
           },
           members,
+          hp_website: honeypotRef.current?.value || "",
+          ...(REGISTER_ACCESS_TOKEN ? { access_token: REGISTER_ACCESS_TOKEN } : {}),
+          form_opened_at: formOpenedAtRef.current,
         }),
       });
 
@@ -700,10 +716,28 @@ Thank you! 🙏`;
       <section id="register" className="below-fold px-5 pb-24">
         <div className="mx-auto max-w-5xl">
           <SectionHeading event={event}>Registration Form</SectionHeading>
+          {!registrationsOpen && (
+            <div className="mx-auto mb-8 max-w-2xl rounded-2xl border border-amber-500/40 bg-amber-500/10 px-6 py-5 text-center">
+              <div className="mb-2 text-lg font-black text-amber-300">Registrations Not Open Yet</div>
+              <p className="text-sm leading-6 text-[#d4d4d8]">
+                {event.name} registration for NNRG Tech Fest {festYear} will open when the college officially shares the link.
+                Do not pay or submit until then.
+              </p>
+            </div>
+          )}
           <p className="mx-auto mb-8 max-w-2xl text-center text-sm text-[#6e7681]">
             Fill in your details below. After submission, tap the WhatsApp button to send your registration confirmation to the coordinator.
           </p>
           <form ref={formRef} onSubmit={handleSubmit} className="mx-auto max-w-[760px] rounded-2xl border border-white/[.06] bg-[#0D1B2A] p-6 sm:p-9">
+            <input
+              ref={honeypotRef}
+              type="text"
+              name="company"
+              tabIndex={-1}
+              autoComplete="off"
+              aria-hidden="true"
+              className="pointer-events-none absolute -left-[9999px] h-0 w-0 opacity-0"
+            />
             <SelectInput id="college" label="College *" value={form.college} onChange={updateForm} options={colleges} placeholder="Select college" error={errors.college} event={event} />
             {form.college === "Other" && (
               <TextInput id="otherCollege" value={form.otherCollege} onChange={updateForm} placeholder="Type your college name" error={errors.otherCollege} label="Other College *" event={event} />
@@ -773,12 +807,17 @@ Thank you! 🙏`;
 
             <button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || !registrationsOpen}
               className="flex w-full items-center justify-center gap-2 rounded-[10px] px-5 py-[18px] text-[15px] font-bold text-black transition active:scale-[.98] disabled:cursor-not-allowed disabled:opacity-70"
               style={{ background: event.accent }}
             >
               {submitting ? <Loader2 className="animate-spin" size={19} /> : <PlusCircle size={19} />}
-              {submitting ? "Submitting..." : "Submit Registration & Open WhatsApp"} <ArrowRight size={18} />
+              {!registrationsOpen
+                ? "Registrations Closed"
+                : submitting
+                  ? "Submitting..."
+                  : "Submit Registration & Open WhatsApp"}{" "}
+              {registrationsOpen && !submitting ? <ArrowRight size={18} /> : null}
             </button>
             <p className="mt-5 text-center text-[11px] leading-5 text-[#6e7681]">
               By submitting, you agree to the event rules and confirm that your payment has been made. All decisions by the organizing committee are final.

@@ -1,4 +1,16 @@
-export const REGISTER_ENDPOINT = "https://npdpdzutluesuwzofvcd.supabase.co/functions/v1/smart-api";
+/**
+ * Production: browser calls same-origin Vercel proxy (/api/smart-api).
+ * Supabase URL + access token live ONLY in Vercel env (server-side).
+ * Local Vite dev still talks to smart-api directly.
+ */
+export const REGISTER_ENDPOINT = import.meta.env.DEV
+  ? "https://npdpdzutluesuwzofvcd.supabase.co/functions/v1/smart-api"
+  : "/api/smart-api";
+
+/** Dev-only. Production token is injected by Vercel /api/smart-api (never ship in bundle). */
+export const REGISTER_ACCESS_TOKEN = import.meta.env.DEV
+  ? "nnrg-tara-2027-reg-k7m9x2q4w8"
+  : "";
 
 export type Coordinator = {
   name: string;
@@ -54,6 +66,7 @@ export type SupabaseEventConfig = {
   resource_view_url: string | null;
   resource_download_url: string | null;
   resource_tip: string | null;
+  registrations_open?: boolean;
 };
 
 export type EventResource = {
