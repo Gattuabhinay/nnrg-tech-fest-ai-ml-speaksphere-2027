@@ -704,34 +704,66 @@ Thank you! 🙏`;
                 </div>
               )}
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-lg bg-white/5 p-4">
-                <div className="mb-1 text-[10px] uppercase tracking-[2px] text-[#6e7681]">UPI ID</div>
-                {payment.upiId ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      openUpiPaymentApp(
-                        payment.upiId,
-                        payment.upiName,
-                        payment.note || event.qrNote || event.name
-                      )
-                    }
-                    className="text-left text-sm font-bold underline decoration-dotted underline-offset-4 transition active:scale-[.98]"
-                    style={{ color: event.accent }}
-                    title="Opens PhonePe / GPay / Paytm"
-                  >
-                    {payment.upiId}
-                  </button>
-                ) : (
-                  <div className="text-sm font-bold" style={{ color: event.accent }}>{PLAIN}</div>
-                )}
-                <div className="mt-1.5 text-[10px] text-[#6e7681]">
-                  {payment.fromSupabase
-                    ? "Tap UPI ID to open your payment app"
-                    : "Loading UPI from server… tap works after load"}
-                </div>
+
+            {/* Themed UPI tap card — matches event accent */}
+            <div
+              className="mb-5 overflow-hidden rounded-2xl border p-5 sm:p-6"
+              style={{
+                borderColor: `${event.accent}55`,
+                background: `linear-gradient(160deg, ${event.accent}18 0%, #0D1B2A 45%, #0a1520 100%)`,
+                boxShadow: `0 0 40px ${event.glow}`,
+              }}
+            >
+              <div
+                className="mb-3 inline-flex rounded-md px-3 py-1 text-[10px] font-bold uppercase tracking-[2px] text-black"
+                style={{ background: event.accent }}
+              >
+                Pay via UPI
               </div>
+              <p className="mb-4 text-sm leading-6 text-[#c9d1d9]">
+                On click of the UPI ID you will be redirected to your main payment application
+                (PhonePe / GPay / Paytm). Enter <strong style={{ color: event.accent }}>₹{payment.amount}</strong> manually, then come back with your Transaction ID.
+              </p>
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#6e7681]">UPI ID — tap to pay</div>
+              {payment.upiId ? (
+                <button
+                  type="button"
+                  onClick={() =>
+                    openUpiPaymentApp(
+                      payment.upiId,
+                      payment.upiName,
+                      payment.note || event.qrNote || event.name
+                    )
+                  }
+                  className="flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-4 text-left transition active:scale-[.99]"
+                  style={{
+                    borderColor: event.accent,
+                    background: `${event.accent}22`,
+                    color: event.accent,
+                  }}
+                  title="Opens your UPI payment app"
+                >
+                  <span className="break-all text-base font-black tracking-wide sm:text-lg">{payment.upiId}</span>
+                  <span
+                    className="shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-black"
+                    style={{ background: event.accent }}
+                  >
+                    Open App
+                  </span>
+                </button>
+              ) : (
+                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-[#6e7681]">
+                  Loading UPI ID from server…
+                </div>
+              )}
+              <p className="mt-3 text-[11px] leading-5 text-[#8b949e]">
+                {payment.fromSupabase
+                  ? "UPI ID loaded from official event settings. Works best on your phone."
+                  : "Fetching latest UPI ID from server — tap will use the live ID once loaded."}
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
               {[
                 ["PHONE", payment.upiPhone || PLAIN, event.accent],
                 ["NAME", payment.upiName || PLAIN, "#FFFFFF"],
