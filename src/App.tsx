@@ -1,8 +1,8 @@
-import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { FormEvent, useLayoutEffect, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowRight, Download, ExternalLink, Eye, Loader2, PlusCircle } from "lucide-react";
 import { DEFAULT_EVENT } from "./defaultEvent";
 import {
-  buildUpiQrDataUrl,
+  buildUpiQrDataUrlSync,
   buildWhatsAppUrl,
   feeLabelFromAmount,
   fetchEventConfig,
@@ -254,21 +254,14 @@ function App() {
     };
   }, [event.slug]);
 
-  // Local QR — no QuickChart network hop (that was the slow load).
-  useEffect(() => {
-    let active = true;
+  // Sync local QR on first paint — no internet, no extra JS chunk.
+  useLayoutEffect(() => {
     if (!payment.upiId || !payment.upiName) {
       setQrUrl("");
       return;
     }
-    const note = payment.note || event.name;
-    buildUpiQrDataUrl(payment.upiId, payment.upiName, note).then((url) => {
-      if (active) setQrUrl(url);
-    });
-    return () => {
-      active = false;
-    };
-  }, [payment.upiId, payment.upiName, payment.note, event.name]);
+    setQrUrl(buildUpiQrDataUrlSync(payment.upiId, payment.upiName, payment.note || event.qrNote || event.name));
+  }, [payment.upiId, payment.upiName, payment.note, event.qrNote, event.name]);
 
   useEffect(() => {
     const title = `${event.name.toUpperCase()} — NNRG Tech Fest ${festYear}`;

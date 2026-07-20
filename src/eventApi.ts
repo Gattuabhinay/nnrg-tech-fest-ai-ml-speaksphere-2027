@@ -1,3 +1,6 @@
+import QRCode from "qrcode";
+import { PAYMENT_DEFAULTS } from "./paymentDefaults";
+
 /**
  * Production: browser calls same-origin Vercel proxy (/api/smart-api).
  * Supabase URL + access token live ONLY in Vercel env (server-side).
@@ -159,17 +162,9 @@ export function buildUpiPaymentString(upiId: string, upiName: string, note: stri
 
 const upiQrMemoryCache = new Map<string, string>();
 
-/**
- * Local UPI QR (data URL). No QuickChart / CDN — permanent fast path.
- * Cached in memory + sessionStorage so revisit is instant.
- */
-export async function buildUpiQrDataUrl(upiId: string, upiName: string, note: string) {
-  const payload = buildUpiPaymentString(upiId, upiName, note);
-  if (!payload.startsWith("upi://pay?pa=")) return "";
-
+function readCachedQr(payload: string) {
   const cached = upiQrMemoryCache.get(payload);
   if (cached) return cached;
-
   const storageKey = `nnrg-upi-qr:${payload}`;
   try {
     const fromSession = sessionStorage.getItem(storageKey);
@@ -180,22 +175,60 @@ export async function buildUpiQrDataUrl(upiId: string, upiName: string, note: st
   } catch {
     /* private mode / blocked storage */
   }
+  return "";
+}
 
-  const { default: QRCode } = await import("qrcode");
-  const dataUrl = await QRCode.toDataURL(payload, {
-    errorCorrectionLevel: "M",
-    margin: 1,
-    width: 280,
-    color: { dark: "#000000", light: "#ffffff" },
-  });
-
+function writeCachedQr(payload: string, dataUrl: string) {
   upiQrMemoryCache.set(payload, dataUrl);
   try {
-    sessionStorage.setItem(storageKey, dataUrl);
+    sessionStorage.setItem(`nnrg-upi-qr:${payload}`, dataUrl);
   } catch {
     /* ignore quota */
   }
+}
+
+/**
+ * Sync local UPI QR — no QuickChart, no extra network chunk.
+ * Uses static qrcode import so generation is instant on first paint.
+ */
+export function buildUpiQrDataUrlSync(upiId: string, upiName: string, note: string) {
+  const payload = buildUpiPaymentString(upiId, upiName, note);
+  if (!upiId.trim() || !upiName.trim()) return "";
+
+  const cached = readCachedQr(payload);
+  if (cached) return cached;
+
+  // Draw synchronously on an offscreen canvas (no second JS download).
+  const canvas = document.createElement("canvas");
+  // qrcode's toCanvas is async; create() + manual draw keeps first paint instant.
+  const model = QRCode.create(payload, { errorCorrectionLevel: "M" });
+  const modules = model.modules;
+  const count = modules.size;
+  const margin = 1;
+  const scale = Math.max(2, Math.floor(280 / (count + margin * 2)));
+  const size = (count + margin * 2) * scale;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return "";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, size, size);
+  ctx.fillStyle = "#000000";
+  for (let row = 0; row < count; row += 1) {
+    for (let col = 0; col < count; col += 1) {
+      if (modules.get(row, col)) {
+        ctx.fillRect((col + margin) * scale, (row + margin) * scale, scale, scale);
+      }
+    }
+  }
+  const dataUrl = canvas.toDataURL("image/png");
+  writeCachedQr(payload, dataUrl);
   return dataUrl;
+}
+
+/** Async wrapper kept for callers; resolves immediately via sync path. */
+export async function buildUpiQrDataUrl(upiId: string, upiName: string, note: string) {
+  return buildUpiQrDataUrlSync(upiId, upiName, note);
 }
 
 function coordinatorsFromColumns(columns: Array<[string | null | undefined, string | null | undefined]>) {
@@ -280,9 +313,10 @@ export function getWhatsAppRedirect(event: SupabaseEventConfig | null): { name: 
 
 export function getPaymentDetails(event: SupabaseEventConfig | null, staticFee: number) {
   return {
-    upiId: event?.upi_id?.trim() || "",
-    upiPhone: event?.upi_phone?.trim() || "",
-    upiName: event?.upi_name?.trim() || "",
+    // Local defaults first so QR never waits on internet for UPI fields.
+    upiId: event?.upi_id?.trim() || PAYMENT_DEFAULTS.upiId,
+    upiPhone: event?.upi_phone?.trim() || PAYMENT_DEFAULTS.upiPhone,
+    upiName: event?.upi_name?.trim() || PAYMENT_DEFAULTS.upiName,
     amount: event?.fee_amount ?? staticFee,
     note: event?.payment_note?.trim() || "",
   };
