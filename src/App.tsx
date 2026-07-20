@@ -2,7 +2,7 @@ import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowDown, ArrowRight, Download, ExternalLink, Eye, Loader2, PlusCircle } from "lucide-react";
 import { DEFAULT_EVENT } from "./defaultEvent";
 import {
-  buildUpiQrUrl,
+  buildUpiQrDataUrl,
   buildWhatsAppUrl,
   feeLabelFromAmount,
   fetchEventConfig,
@@ -203,6 +203,7 @@ function App() {
   const [submitting, setSubmitting] = useState(false);
   const [registrationNo, setRegistrationNo] = useState("");
   const [whatsappConfirmUrl, setWhatsappConfirmUrl] = useState("");
+  const [qrUrl, setQrUrl] = useState("");
   const formRef = useRef<HTMLFormElement>(null);
   const whatsappConfirmRef = useRef<HTMLDivElement>(null);
   const honeypotRef = useRef<HTMLInputElement>(null);
@@ -231,10 +232,6 @@ function App() {
   const festYear = eventData?.fest_year ?? 2027;
   const registrationsOpen = eventData?.registrations_open === true;
   const payment = getPaymentDetails(eventData, event.fee);
-  const qrUrl =
-    payment.upiId && payment.upiName
-      ? buildUpiQrUrl(payment.upiId, payment.upiName, payment.note || event.name)
-      : "";
   const whatsappRedirect = getWhatsAppRedirect(eventData);
   const facultyCoordinators = getFacultyCoordinators(eventData);
   const studentCoordinators = getStudentCoordinators(eventData);
@@ -256,6 +253,22 @@ function App() {
       active = false;
     };
   }, [event.slug]);
+
+  // Local QR — no QuickChart network hop (that was the slow load).
+  useEffect(() => {
+    let active = true;
+    if (!payment.upiId || !payment.upiName) {
+      setQrUrl("");
+      return;
+    }
+    const note = payment.note || event.name;
+    buildUpiQrDataUrl(payment.upiId, payment.upiName, note).then((url) => {
+      if (active) setQrUrl(url);
+    });
+    return () => {
+      active = false;
+    };
+  }, [payment.upiId, payment.upiName, payment.note, event.name]);
 
   useEffect(() => {
     const title = `${event.name.toUpperCase()} — NNRG Tech Fest ${festYear}`;
@@ -682,11 +695,15 @@ Thank you! 🙏`;
                   src={qrUrl}
                   alt={`${event.name} UPI payment QR code`}
                   className="h-[260px] w-[260px]"
-                  loading="lazy"
-                  decoding="async"
+                  decoding="sync"
+                  fetchPriority="high"
                   width="260"
                   height="260"
                 />
+              ) : payment.upiId && payment.upiName ? (
+                <div className="flex h-[260px] w-[260px] items-center justify-center">
+                  <Loader2 className="h-8 w-8 animate-spin text-[#6e7681]" aria-label="Generating QR" />
+                </div>
               ) : (
                 <div className="flex h-[260px] w-[260px] items-center justify-center px-6 text-center text-sm text-[#6e7681]">
                   Payment QR will appear once UPI details are added in Supabase.

@@ -157,9 +157,45 @@ export function buildUpiPaymentString(upiId: string, upiName: string, note: stri
   return `upi://pay?${parts.join("&")}`;
 }
 
-export function buildUpiQrUrl(upiId: string, upiName: string, note: string) {
+const upiQrMemoryCache = new Map<string, string>();
+
+/**
+ * Local UPI QR (data URL). No QuickChart / CDN — permanent fast path.
+ * Cached in memory + sessionStorage so revisit is instant.
+ */
+export async function buildUpiQrDataUrl(upiId: string, upiName: string, note: string) {
   const payload = buildUpiPaymentString(upiId, upiName, note);
-  return `https://quickchart.io/qr?ecLevel=H&size=400&text=${encodeURIComponent(payload)}`;
+  if (!payload.startsWith("upi://pay?pa=")) return "";
+
+  const cached = upiQrMemoryCache.get(payload);
+  if (cached) return cached;
+
+  const storageKey = `nnrg-upi-qr:${payload}`;
+  try {
+    const fromSession = sessionStorage.getItem(storageKey);
+    if (fromSession) {
+      upiQrMemoryCache.set(payload, fromSession);
+      return fromSession;
+    }
+  } catch {
+    /* private mode / blocked storage */
+  }
+
+  const { default: QRCode } = await import("qrcode");
+  const dataUrl = await QRCode.toDataURL(payload, {
+    errorCorrectionLevel: "M",
+    margin: 1,
+    width: 280,
+    color: { dark: "#000000", light: "#ffffff" },
+  });
+
+  upiQrMemoryCache.set(payload, dataUrl);
+  try {
+    sessionStorage.setItem(storageKey, dataUrl);
+  } catch {
+    /* ignore quota */
+  }
+  return dataUrl;
 }
 
 function coordinatorsFromColumns(columns: Array<[string | null | undefined, string | null | undefined]>) {
