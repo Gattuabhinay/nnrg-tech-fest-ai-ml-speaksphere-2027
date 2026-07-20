@@ -312,14 +312,24 @@ export function getWhatsAppRedirect(event: SupabaseEventConfig | null): { name: 
 }
 
 export function getPaymentDetails(event: SupabaseEventConfig | null, staticFee: number) {
+  // Prefer live Supabase UPI fields; local defaults only until config arrives.
   return {
-    // Local defaults first so QR never waits on internet for UPI fields.
     upiId: event?.upi_id?.trim() || PAYMENT_DEFAULTS.upiId,
     upiPhone: event?.upi_phone?.trim() || PAYMENT_DEFAULTS.upiPhone,
     upiName: event?.upi_name?.trim() || PAYMENT_DEFAULTS.upiName,
     amount: event?.fee_amount ?? staticFee,
     note: event?.payment_note?.trim() || "",
+    fromSupabase: Boolean(event?.upi_id?.trim()),
   };
+}
+
+/** Opens PhonePe / GPay / Paytm via UPI deep link (mobile). */
+export function openUpiPaymentApp(upiId: string, upiName: string, note: string) {
+  const id = upiId.trim();
+  if (!id) return false;
+  const url = buildUpiPaymentString(id, upiName, note);
+  window.location.href = url;
+  return true;
 }
 
 export function normalizeIndianPhone(phone: string) {

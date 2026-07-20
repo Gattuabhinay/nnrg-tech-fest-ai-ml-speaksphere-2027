@@ -15,6 +15,7 @@ import {
   getWhatsAppRedirect,
   heroFeeLabelFromAmount,
   openWhatsApp,
+  openUpiPaymentApp,
   REGISTER_ACCESS_TOKEN,
   REGISTER_ENDPOINT,
   teamLabelFromMembers,
@@ -704,8 +705,34 @@ Thank you! 🙏`;
               )}
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg bg-white/5 p-4">
+                <div className="mb-1 text-[10px] uppercase tracking-[2px] text-[#6e7681]">UPI ID</div>
+                {payment.upiId ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      openUpiPaymentApp(
+                        payment.upiId,
+                        payment.upiName,
+                        payment.note || event.qrNote || event.name
+                      )
+                    }
+                    className="text-left text-sm font-bold underline decoration-dotted underline-offset-4 transition active:scale-[.98]"
+                    style={{ color: event.accent }}
+                    title="Opens PhonePe / GPay / Paytm"
+                  >
+                    {payment.upiId}
+                  </button>
+                ) : (
+                  <div className="text-sm font-bold" style={{ color: event.accent }}>{PLAIN}</div>
+                )}
+                <div className="mt-1.5 text-[10px] text-[#6e7681]">
+                  {payment.fromSupabase
+                    ? "Tap UPI ID to open your payment app"
+                    : "Loading UPI from server… tap works after load"}
+                </div>
+              </div>
               {[
-                ["UPI ID", payment.upiId || PLAIN, event.accent],
                 ["PHONE", payment.upiPhone || PLAIN, event.accent],
                 ["NAME", payment.upiName || PLAIN, "#FFFFFF"],
                 ["AMOUNT", `₹${payment.amount} (enter manually)`, "#22C55E"],
@@ -787,7 +814,7 @@ Thank you! 🙏`;
             <TextInput id="transactionId" value={form.transactionId} onChange={updateForm} placeholder="UPI Transaction ID after payment" error={errors.transactionId} label="Transaction ID *" event={event} />
 
             <div className="mb-4 border-l-[3px] px-4 py-3 text-[13px] leading-6" style={{ borderColor: event.accent, background: `${event.accent}10`, color: event.accent }}>
-              💡 Reminder: Scan QR or pay to UPI ID <strong>{payment.upiId || PLAIN}</strong>, enter <strong>₹{payment.amount}</strong> manually, then paste your Transaction ID above.
+              💡 Reminder: Scan QR or tap UPI ID <button type="button" className="font-bold underline decoration-dotted underline-offset-2" style={{ color: event.accent }} onClick={() => openUpiPaymentApp(payment.upiId, payment.upiName, payment.note || event.qrNote || event.name)}>{payment.upiId || PLAIN}</button>, enter <strong>₹{payment.amount}</strong> manually, then paste your Transaction ID above.
             </div>
             <div className="mb-5 border-l-[3px] border-[#22C55E] bg-[#22C55E]/[.06] px-4 py-3 text-[13px] leading-6 text-[#22C55E]">
               🟢 After submit: Tap the green WhatsApp button
