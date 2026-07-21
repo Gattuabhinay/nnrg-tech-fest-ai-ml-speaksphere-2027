@@ -148,36 +148,20 @@ export function heroFeeLabelFromAmount(fee: number, minMembers: number, maxMembe
 }
 
 /**
- * NPCI-safe UPI pay URI for QR + links.
- * Amazon Pay (@axl) declines rich QR/intents — use pa + cu only for those.
- * Never put website instructions in the UPI message (tn).
+ * Minimal NPCI UPI pay URI for QR only.
+ * PhonePe/GPay often decline website deep-links and amount-locked collects
+ * ("declined for security reasons") — keep QR as pa + cu only.
+ * Never put website instructions in tn. Never auto-open upi:// from the site.
  */
 export function buildUpiPaymentString(
   upiId: string,
-  upiName: string,
+  _upiName?: string,
   _note?: string,
-  amount?: number,
+  _amount?: number,
 ) {
   const pa = upiId.trim();
   if (!pa) return "";
-
-  // Amazon Pay VPAs: minimal payload only (apps block tn/am/intent collects)
-  if (/@axl$/i.test(pa)) {
-    return `upi://pay?pa=${pa}&cu=INR`;
-  }
-
-  const pn = upiName
-    .trim()
-    .replace(/[^A-Za-z ]+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 50) || "NNRG";
-
-  const parts = [`pa=${pa}`, `pn=${encodeURIComponent(pn)}`, "cu=INR"];
-  if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
-    parts.push(`am=${amount.toFixed(2)}`);
-  }
-  return `upi://pay?${parts.join("&")}`;
+  return `upi://pay?pa=${pa}&cu=INR`;
 }
 
 export function isAmazonPayUpi(upiId: string) {
@@ -212,24 +196,22 @@ export async function copyTextToClipboard(text: string) {
 }
 
 /**
- * Open installed UPI apps with a plain upi:// link (no Android intent:// —
- * intent wrappers are often declined by PhonePe/GPay/Amazon/Navi).
+ * Do NOT deep-link into PhonePe/GPay from the website — that path often shows
+ * "declined for security reasons" even for bank UPIs (@ibl). Copy only.
  */
-export function openUpiPaymentApp(
-  upiId: string,
-  upiName: string,
-  note: string,
-  amount?: number,
-) {
+export async function prepareManualUpiPay(upiId: string) {
   const id = upiId.trim();
   if (!id) return false;
-  void copyTextToClipboard(id);
-  // Plain NPCI link only — same string encoded in the QR
-  window.location.href = buildUpiPaymentString(id, upiName, note, amount);
-  return true;
+  return copyTextToClipboard(id);
 }
 
-const UPI_QR_CACHE_VERSION = "v4";
+/** @deprecated Prefer prepareManualUpiPay — deep links are blocked by PhonePe. */
+export function openUpiPaymentApp(upiId: string) {
+  void prepareManualUpiPay(upiId);
+  return Boolean(upiId.trim());
+}
+
+const UPI_QR_CACHE_VERSION = "v5";
 const upiQrMemoryCache = new Map<string, string>();
 
 function readCachedQr(payload: string) {
@@ -264,12 +246,11 @@ function writeCachedQr(payload: string, dataUrl: string) {
 export function buildUpiQrDataUrlSync(
   upiId: string,
   upiName: string,
-  note: string,
-  amount?: number,
+  note?: string,
+  _amount?: number,
 ) {
-  // Amazon Pay (@axl) often declines amount-locked / rich QRs — keep those minimal.
-  const payAmount = isAmazonPayUpi(upiId) ? undefined : amount;
-  const payload = buildUpiPaymentString(upiId, upiName, note, payAmount);
+  // Always minimal QR (pa+cu). Amount/name/note in QR trigger PhonePe security declines.
+  const payload = buildUpiPaymentString(upiId, upiName, note);
   if (!upiId.trim() || !upiName.trim()) return "";
 
   const cached = readCachedQr(payload);
