@@ -4,6 +4,7 @@ import { DEFAULT_EVENT } from "./defaultEvent";
 import {
   buildUpiQrDataUrlSync,
   buildWhatsAppUrl,
+  copyTextToClipboard,
   feeLabelFromAmount,
   fetchEventConfig,
   formatEventDate,
@@ -14,6 +15,7 @@ import {
   getStudentCoordinators,
   getWhatsAppRedirect,
   heroFeeLabelFromAmount,
+  isAmazonPayUpi,
   openWhatsApp,
   openUpiPaymentApp,
   REGISTER_ACCESS_TOKEN,
@@ -205,6 +207,7 @@ function App() {
   const [registrationNo, setRegistrationNo] = useState("");
   const [whatsappConfirmUrl, setWhatsappConfirmUrl] = useState("");
   const [qrUrl, setQrUrl] = useState("");
+  const [upiCopied, setUpiCopied] = useState(false);
   const formRef = useRef<HTMLFormElement>(null);
   const whatsappConfirmRef = useRef<HTMLDivElement>(null);
   const honeypotRef = useRef<HTMLInputElement>(null);
@@ -233,6 +236,7 @@ function App() {
   const festYear = eventData?.fest_year ?? 2027;
   const registrationsOpen = eventData?.registrations_open === true;
   const payment = getPaymentDetails(eventData, event.fee);
+  const amazonPayUpi = isAmazonPayUpi(payment.upiId);
   const whatsappRedirect = getWhatsAppRedirect(eventData);
   const facultyCoordinators = getFacultyCoordinators(eventData);
   const studentCoordinators = getStudentCoordinators(eventData);
@@ -283,6 +287,22 @@ function App() {
   function updateForm(id: keyof FormState, value: string) {
     setForm((current) => ({ ...current, [id]: value }));
     setErrors((current) => ({ ...current, [id]: undefined }));
+  }
+
+  async function handleCopyUpiId() {
+    if (!payment.upiId) return;
+    const ok = await copyTextToClipboard(payment.upiId);
+    setUpiCopied(ok);
+    window.setTimeout(() => setUpiCopied(false), 2500);
+  }
+
+  function handlePayViaApp() {
+    openUpiPaymentApp(
+      payment.upiId,
+      payment.upiName,
+      event.qrNote || event.name,
+      amazonPayUpi ? undefined : payment.amount,
+    );
   }
 
   function validate() {
@@ -688,8 +708,10 @@ Thank you! 🙏`;
             </div>
             <div className="mb-2 text-center text-[10px] font-bold uppercase tracking-[3px] text-[#6e7681]">Scan QR Code To Pay</div>
             <p className="mx-auto mb-4 max-w-md text-center text-xs leading-5 text-[#8b949e]">
-              Scan the QR with <strong style={{ color: event.accent }}>any UPI app</strong>. Amount{" "}
-              <strong style={{ color: event.accent }}>₹{payment.amount}</strong> is included in the QR.
+              Open PhonePe / GPay / Paytm / any UPI app → <strong style={{ color: event.accent }}>Scan QR</strong>
+              {amazonPayUpi
+                ? `. Then enter ₹${payment.amount} manually.`
+                : `. Amount ₹${payment.amount} is in the QR.`}
             </p>
             <div className="mx-auto mb-7 w-fit rounded-[10px] bg-white p-3">
               {qrUrl ? (
@@ -713,7 +735,7 @@ Thank you! 🙏`;
               )}
             </div>
 
-            {/* Themed UPI tap card — matches event accent */}
+            {/* Permanent pay card: Copy UPI first (works when QR/deep-link is blocked) */}
             <div
               className="mb-5 overflow-hidden rounded-2xl border p-5 sm:p-6"
               style={{
@@ -726,50 +748,51 @@ Thank you! 🙏`;
                 className="mb-3 inline-flex rounded-md px-3 py-1 text-[10px] font-bold uppercase tracking-[2px] text-black"
                 style={{ background: event.accent }}
               >
-                Pay via UPI
+                Pay ₹{payment.amount} via UPI
               </div>
-              <p className="mb-4 text-sm leading-6 text-[#c9d1d9]">
-                On click of the UPI ID, your phone will show <strong style={{ color: event.accent }}>all installed UPI apps</strong>
-                {" "}— pick any one. Amount <strong style={{ color: event.accent }}>₹{payment.amount}</strong> is filled automatically.
-                Then paste your Transaction ID in the form. Prefer QR if you want to open an app and scan.
-              </p>
-              <div className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#6e7681]">UPI ID — tap to pay</div>
-              {payment.upiId ? (
-                <button
-                  type="button"
-                  onClick={() =>
-                    openUpiPaymentApp(
-                      payment.upiId,
-                      payment.upiName,
-                      event.qrNote || event.name,
-                      payment.amount,
-                    )
-                  }
-                  className="flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-4 text-left transition active:scale-[.99]"
-                  style={{
-                    borderColor: event.accent,
-                    background: `${event.accent}22`,
-                    color: event.accent,
-                  }}
-                  title="Opens the UPI app chooser on your phone"
-                >
-                  <span className="break-all text-base font-black tracking-wide sm:text-lg">{payment.upiId}</span>
-                  <span
-                    className="shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-black"
-                    style={{ background: event.accent }}
-                  >
-                    Choose App
-                  </span>
-                </button>
-              ) : (
-                <div className="rounded-xl border border-white/10 bg-white/5 px-4 py-4 text-sm text-[#6e7681]">
-                  Loading UPI ID from server…
+
+              {amazonPayUpi && (
+                <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-[12px] leading-5 text-amber-100">
+                  This event uses an <strong>Amazon Pay UPI</strong> ID (<code>@axl</code>).
+                  PhonePe / GPay / Paytm / Navi often block auto QR / app-link pays to Amazon IDs for security.
+                  <strong> Permanent fix:</strong> Copy the UPI ID below → open your payment app → Pay to UPI ID → paste → enter ₹{payment.amount}.
+                  For zero friction next year, set a bank UPI in Supabase (<code>@ibl</code> / <code>@ybl</code> / <code>@oksbi</code>).
                 </div>
               )}
+
+              <p className="mb-4 text-sm leading-6 text-[#c9d1d9]">
+                Most reliable method for all apps: <strong style={{ color: event.accent }}>Copy UPI ID</strong>, then pay from inside your app.
+              </p>
+
+              <div className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#6e7681]">UPI ID</div>
+              <div
+                className="mb-3 break-all rounded-xl border px-4 py-4 text-base font-black tracking-wide sm:text-lg"
+                style={{ borderColor: `${event.accent}66`, background: "#00000055", color: event.accent }}
+              >
+                {payment.upiId || PLAIN}
+              </div>
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <button
+                  type="button"
+                  onClick={() => void handleCopyUpiId()}
+                  className="rounded-xl px-4 py-3.5 text-[13px] font-bold text-black transition active:scale-[.98]"
+                  style={{ background: event.accent }}
+                >
+                  {upiCopied ? "Copied ✓" : "Copy UPI ID"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePayViaApp}
+                  className="rounded-xl border px-4 py-3.5 text-[13px] font-bold transition active:scale-[.98]"
+                  style={{ borderColor: event.accent, color: event.accent, background: `${event.accent}18` }}
+                >
+                  Try open UPI app
+                </button>
+              </div>
+
               <p className="mt-3 text-[11px] leading-5 text-[#8b949e]">
-                {payment.fromSupabase
-                  ? "UPI ID copied on tap. Android shows every UPI app installed on the phone. QR works with any UPI scanner."
-                  : "Fetching latest UPI ID from server — tap will use the live ID once loaded."}
+                Steps: Copy UPI ID → PhonePe/GPay/Paytm/Navi → To UPI ID → paste → pay ₹{payment.amount} → copy Transaction ID into the form below.
               </p>
             </div>
 
@@ -856,7 +879,8 @@ Thank you! 🙏`;
             <TextInput id="transactionId" value={form.transactionId} onChange={updateForm} placeholder="UPI Transaction ID after payment" error={errors.transactionId} label="Transaction ID *" event={event} />
 
             <div className="mb-4 border-l-[3px] px-4 py-3 text-[13px] leading-6" style={{ borderColor: event.accent, background: `${event.accent}10`, color: event.accent }}>
-              💡 Reminder: Scan QR or tap UPI ID <button type="button" className="font-bold underline decoration-dotted underline-offset-2" style={{ color: event.accent }} onClick={() => openUpiPaymentApp(payment.upiId, payment.upiName, event.qrNote || event.name, payment.amount)}>{payment.upiId || PLAIN}</button>, pay <strong>₹{payment.amount}</strong>, then paste your Transaction ID above.
+              💡 Reminder: Prefer <strong>Copy UPI ID</strong> above, pay <strong>₹{payment.amount}</strong> in your app, then paste Transaction ID here.
+              UPI: <button type="button" className="font-bold underline decoration-dotted underline-offset-2" style={{ color: event.accent }} onClick={() => void handleCopyUpiId()}>{payment.upiId || PLAIN}</button>
             </div>
             <div className="mb-5 border-l-[3px] border-[#22C55E] bg-[#22C55E]/[.06] px-4 py-3 text-[13px] leading-6 text-[#22C55E]">
               🟢 After submit: Tap the green WhatsApp button

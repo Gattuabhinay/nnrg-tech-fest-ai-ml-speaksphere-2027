@@ -147,70 +147,68 @@ export function heroFeeLabelFromAmount(fee: number, minMembers: number, maxMembe
   return fallback || `₹${fee}/team`;
 }
 
-/** Short clean UPI note only — never website instructions (banks decline those). */
-export function buildSafeUpiNote(preferred: string, fallback = "NNRG_TechFest") {
-  const raw = (preferred || fallback || "NNRG_TechFest").trim();
-  if (/pay first|transaction id|registration form|submit the upi|check the detail/i.test(raw)) {
-    return fallback.replace(/[^A-Za-z0-9 _-]/g, "").trim().slice(0, 40) || "NNRG_TechFest";
-  }
-  const cleaned = raw.replace(/[^A-Za-z0-9 _-]/g, "").trim();
-  return (cleaned || fallback).slice(0, 40);
-}
-
 /**
- * Same payload for QR + tap. Do NOT put payment_note instructions in `tn`.
- * Include amount so apps prefill the correct fee.
+ * NPCI-safe UPI pay URI for QR + links.
+ * - Do NOT put website instructions in tn (banks/Amazon decline those)
+ * - Do NOT over-encode pa (@ must stay @)
+ * - Keep pn letters/spaces only
+ * - Skip tn entirely (safest for @axl / PhonePe / GPay / Paytm / Navi)
  */
 export function buildUpiPaymentString(
   upiId: string,
   upiName: string,
-  note: string,
+  _note?: string,
   amount?: number,
 ) {
   const pa = upiId.trim();
-  const pn = upiName.trim();
-  const tn = buildSafeUpiNote(note);
-  const parts = [
-    `pa=${encodeURIComponent(pa)}`,
-    `pn=${encodeURIComponent(pn)}`,
-    `cu=INR`,
-  ];
+  const pn = upiName
+    .trim()
+    .replace(/[^A-Za-z ]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 50) || "NNRG";
+
+  const parts = [`pa=${pa}`, `pn=${encodeURIComponent(pn)}`, "cu=INR"];
   if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
-    parts.push(`am=${encodeURIComponent(String(amount))}`);
+    parts.push(`am=${amount.toFixed(2)}`);
   }
-  if (tn) parts.push(`tn=${encodeURIComponent(tn)}`);
   return `upi://pay?${parts.join("&")}`;
 }
 
-/**
- * Android Intent URL with NO package lock — OS shows EVERY installed app
- * that handles UPI (GPay, PhonePe, Paytm, BHIM, Amazon Pay, bank UPI apps…).
- * Same payment payload as the QR code.
- */
-export function buildUpiAndroidIntentUrl(
-  upiId: string,
-  upiName: string,
-  note: string,
-  amount?: number,
-) {
-  const upi = buildUpiPaymentString(upiId, upiName, note, amount);
-  // upi://pay?... → intent://pay?...#Intent;scheme=upi;...
-  const pathAndQuery = upi.replace(/^upi:\/\//, "");
-  return (
-    `intent://${pathAndQuery}` +
-    "#Intent;scheme=upi;action=android.intent.action.VIEW;" +
-    "category=android.intent.category.BROWSABLE;end"
-  );
+export function isAmazonPayUpi(upiId: string) {
+  return /@axl$/i.test(upiId.trim());
 }
 
-function isAndroidMobile() {
-  if (typeof navigator === "undefined") return false;
-  return /Android/i.test(navigator.userAgent);
+export async function copyTextToClipboard(text: string) {
+  const value = text.trim();
+  if (!value) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const el = document.createElement("textarea");
+    el.value = value;
+    el.setAttribute("readonly", "");
+    el.style.position = "fixed";
+    el.style.left = "-9999px";
+    document.body.appendChild(el);
+    el.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(el);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 /**
- * Opens the phone's UPI app chooser (all installed UPI apps).
- * Uses the same clean payload as the QR (no instructional payment_note).
+ * Open installed UPI apps with a plain upi:// link (no Android intent:// —
+ * intent wrappers are often declined by PhonePe/GPay/Amazon/Navi).
  */
 export function openUpiPaymentApp(
   upiId: string,
@@ -220,31 +218,19 @@ export function openUpiPaymentApp(
 ) {
   const id = upiId.trim();
   if (!id) return false;
-  const upiUrl = buildUpiPaymentString(id, upiName, note, amount);
-
-  try {
-    void navigator.clipboard?.writeText(id);
-  } catch {
-    /* clipboard optional */
-  }
-
-  if (isAndroidMobile()) {
-    window.location.href = buildUpiAndroidIntentUrl(id, upiName, note, amount);
-    window.setTimeout(() => {
-      if (!document.hidden) window.location.href = upiUrl;
-    }, 800);
-  } else {
-    window.location.href = upiUrl;
-  }
+  void copyTextToClipboard(id);
+  // Plain NPCI link only — same string encoded in the QR
+  window.location.href = buildUpiPaymentString(id, upiName, note, amount);
   return true;
 }
 
+const UPI_QR_CACHE_VERSION = "v3";
 const upiQrMemoryCache = new Map<string, string>();
 
 function readCachedQr(payload: string) {
   const cached = upiQrMemoryCache.get(payload);
   if (cached) return cached;
-  const storageKey = `nnrg-upi-qr:${payload}`;
+  const storageKey = `nnrg-upi-qr-${UPI_QR_CACHE_VERSION}:${payload}`;
   try {
     const fromSession = sessionStorage.getItem(storageKey);
     if (fromSession) {
@@ -260,7 +246,7 @@ function readCachedQr(payload: string) {
 function writeCachedQr(payload: string, dataUrl: string) {
   upiQrMemoryCache.set(payload, dataUrl);
   try {
-    sessionStorage.setItem(`nnrg-upi-qr:${payload}`, dataUrl);
+    sessionStorage.setItem(`nnrg-upi-qr-${UPI_QR_CACHE_VERSION}:${payload}`, dataUrl);
   } catch {
     /* ignore quota */
   }
@@ -276,7 +262,9 @@ export function buildUpiQrDataUrlSync(
   note: string,
   amount?: number,
 ) {
-  const payload = buildUpiPaymentString(upiId, upiName, note, amount);
+  // Amazon Pay (@axl) often declines amount-locked / rich QRs — keep those minimal.
+  const payAmount = isAmazonPayUpi(upiId) ? undefined : amount;
+  const payload = buildUpiPaymentString(upiId, upiName, note, payAmount);
   if (!upiId.trim() || !upiName.trim()) return "";
 
   const cached = readCachedQr(payload);
