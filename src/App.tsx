@@ -3,6 +3,7 @@ import { ArrowDown, ArrowRight, Download, ExternalLink, Eye, Loader2, PlusCircle
 import { DEFAULT_EVENT } from "./defaultEvent";
 import {
   buildUpiQrDataUrlSync,
+  buildUpiPaymentString,
   buildWhatsAppUrl,
   copyTextToClipboard,
   feeLabelFromAmount,
@@ -237,6 +238,14 @@ function App() {
   const registrationsOpen = eventData?.registrations_open === true;
   const payment = getPaymentDetails(eventData, event.fee);
   const amazonPayUpi = isAmazonPayUpi(payment.upiId);
+  const upiPayLink = payment.upiId
+    ? buildUpiPaymentString(
+        payment.upiId,
+        payment.upiName,
+        event.qrNote || event.name,
+        amazonPayUpi ? undefined : payment.amount,
+      )
+    : "";
   const whatsappRedirect = getWhatsAppRedirect(eventData);
   const facultyCoordinators = getFacultyCoordinators(eventData);
   const studentCoordinators = getStudentCoordinators(eventData);
@@ -734,6 +743,12 @@ Thank you! 🙏`;
                 </div>
               )}
             </div>
+            {upiPayLink && (
+              <p className="mx-auto mb-5 max-w-md break-all text-center text-[10px] leading-4 text-[#6e7681]">
+                QR contains only: <span className="text-[#8b949e]">{upiPayLink}</span>
+                {" "}(no “Pay first…” text)
+              </p>
+            )}
 
             {/* Permanent pay card: Copy UPI first (works when QR/deep-link is blocked) */}
             <div

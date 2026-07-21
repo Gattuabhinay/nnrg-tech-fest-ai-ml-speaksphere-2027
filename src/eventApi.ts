@@ -149,10 +149,8 @@ export function heroFeeLabelFromAmount(fee: number, minMembers: number, maxMembe
 
 /**
  * NPCI-safe UPI pay URI for QR + links.
- * - Do NOT put website instructions in tn (banks/Amazon decline those)
- * - Do NOT over-encode pa (@ must stay @)
- * - Keep pn letters/spaces only
- * - Skip tn entirely (safest for @axl / PhonePe / GPay / Paytm / Navi)
+ * Amazon Pay (@axl) declines rich QR/intents — use pa + cu only for those.
+ * Never put website instructions in the UPI message (tn).
  */
 export function buildUpiPaymentString(
   upiId: string,
@@ -161,6 +159,13 @@ export function buildUpiPaymentString(
   amount?: number,
 ) {
   const pa = upiId.trim();
+  if (!pa) return "";
+
+  // Amazon Pay VPAs: minimal payload only (apps block tn/am/intent collects)
+  if (/@axl$/i.test(pa)) {
+    return `upi://pay?pa=${pa}&cu=INR`;
+  }
+
   const pn = upiName
     .trim()
     .replace(/[^A-Za-z ]+/g, " ")
@@ -224,7 +229,7 @@ export function openUpiPaymentApp(
   return true;
 }
 
-const UPI_QR_CACHE_VERSION = "v3";
+const UPI_QR_CACHE_VERSION = "v4";
 const upiQrMemoryCache = new Map<string, string>();
 
 function readCachedQr(payload: string) {
