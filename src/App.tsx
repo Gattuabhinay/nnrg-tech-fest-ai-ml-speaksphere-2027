@@ -16,7 +16,6 @@ import {
   getStudentCoordinators,
   getWhatsAppRedirect,
   heroFeeLabelFromAmount,
-  isAmazonPayUpi,
   openWhatsApp,
   prepareManualUpiPay,
   REGISTER_ACCESS_TOKEN,
@@ -238,7 +237,6 @@ function App() {
   const festYear = eventData?.fest_year ?? 2027;
   const registrationsOpen = eventData?.registrations_open === true;
   const payment = getPaymentDetails(eventData, event.fee);
-  const amazonPayUpi = isAmazonPayUpi(payment.upiId);
   const upiPayLink = payment.upiId
     ? buildUpiPaymentString(payment.upiId)
     : "";
@@ -725,17 +723,6 @@ Thank you! 🙏`;
                 Pay ₹{payment.amount} via UPI
               </div>
 
-              <div className="mb-4 rounded-xl border border-rose-400/40 bg-rose-500/10 px-4 py-3 text-[12px] leading-5 text-rose-50">
-                If PhonePe shows <strong>“declined for security reasons”</strong>, do <strong>not</strong> use QR or any auto-open button.
-                Use <strong>Copy UPI ID</strong> (or mobile number) → open PhonePe yourself → <strong>To UPI ID / mobile</strong> → paste → enter ₹{payment.amount} → pay.
-              </div>
-
-              {amazonPayUpi && (
-                <div className="mb-4 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-[12px] leading-5 text-amber-100">
-                  This event uses an <strong>Amazon Pay</strong> UPI (<code>@axl</code>). Prefer Copy UPI / mobile — QR and app-links are often blocked.
-                </div>
-              )}
-
               <div className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#6e7681]">UPI ID</div>
               <div
                 className="mb-3 break-all rounded-xl border px-4 py-4 text-base font-black tracking-wide sm:text-lg"
@@ -786,8 +773,7 @@ Thank you! 🙏`;
 
             <div className="mb-2 text-center text-[10px] font-bold uppercase tracking-[3px] text-[#6e7681]">Optional: Scan QR</div>
             <p className="mx-auto mb-4 max-w-md text-center text-xs leading-5 text-[#8b949e]">
-              If scan also shows a security decline, ignore the QR and use <strong style={{ color: event.accent }}>Copy UPI ID</strong> above.
-              After a successful scan, enter <strong>₹{payment.amount}</strong> manually.
+              Or scan the QR in your UPI app, then enter <strong>₹{payment.amount}</strong> manually.
             </p>
             <div className="mx-auto mb-7 w-fit rounded-[10px] bg-white p-3">
               {qrUrl ? (
