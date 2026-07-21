@@ -147,15 +147,37 @@ export function heroFeeLabelFromAmount(fee: number, minMembers: number, maxMembe
   return fallback || `₹${fee}/team`;
 }
 
-export function buildUpiPaymentString(upiId: string, upiName: string, note: string) {
+/** Short clean UPI note only — never website instructions (banks decline those). */
+export function buildSafeUpiNote(preferred: string, fallback = "NNRG_TechFest") {
+  const raw = (preferred || fallback || "NNRG_TechFest").trim();
+  if (/pay first|transaction id|registration form|submit the upi|check the detail/i.test(raw)) {
+    return fallback.replace(/[^A-Za-z0-9 _-]/g, "").trim().slice(0, 40) || "NNRG_TechFest";
+  }
+  const cleaned = raw.replace(/[^A-Za-z0-9 _-]/g, "").trim();
+  return (cleaned || fallback).slice(0, 40);
+}
+
+/**
+ * Same payload for QR + tap. Do NOT put payment_note instructions in `tn`.
+ * Include amount so apps prefill the correct fee.
+ */
+export function buildUpiPaymentString(
+  upiId: string,
+  upiName: string,
+  note: string,
+  amount?: number,
+) {
   const pa = upiId.trim();
   const pn = upiName.trim();
-  const tn = note.trim().slice(0, 50);
+  const tn = buildSafeUpiNote(note);
   const parts = [
     `pa=${encodeURIComponent(pa)}`,
     `pn=${encodeURIComponent(pn)}`,
     `cu=INR`,
   ];
+  if (typeof amount === "number" && Number.isFinite(amount) && amount > 0) {
+    parts.push(`am=${encodeURIComponent(String(amount))}`);
+  }
   if (tn) parts.push(`tn=${encodeURIComponent(tn)}`);
   return `upi://pay?${parts.join("&")}`;
 }
@@ -165,8 +187,13 @@ export function buildUpiPaymentString(upiId: string, upiName: string, note: stri
  * that handles UPI (GPay, PhonePe, Paytm, BHIM, Amazon Pay, bank UPI apps…).
  * Same payment payload as the QR code.
  */
-export function buildUpiAndroidIntentUrl(upiId: string, upiName: string, note: string) {
-  const upi = buildUpiPaymentString(upiId, upiName, note);
+export function buildUpiAndroidIntentUrl(
+  upiId: string,
+  upiName: string,
+  note: string,
+  amount?: number,
+) {
+  const upi = buildUpiPaymentString(upiId, upiName, note, amount);
   // upi://pay?... → intent://pay?...#Intent;scheme=upi;...
   const pathAndQuery = upi.replace(/^upi:\/\//, "");
   return (
@@ -182,13 +209,18 @@ function isAndroidMobile() {
 }
 
 /**
- * Opens the phone's UPI app chooser (all installed UPI apps), not only 3 brands.
- * QR still works everywhere; tap uses the same upi:// payload via OS Intent.
+ * Opens the phone's UPI app chooser (all installed UPI apps).
+ * Uses the same clean payload as the QR (no instructional payment_note).
  */
-export function openUpiPaymentApp(upiId: string, upiName: string, note: string) {
+export function openUpiPaymentApp(
+  upiId: string,
+  upiName: string,
+  note: string,
+  amount?: number,
+) {
   const id = upiId.trim();
   if (!id) return false;
-  const upiUrl = buildUpiPaymentString(id, upiName, note);
+  const upiUrl = buildUpiPaymentString(id, upiName, note, amount);
 
   try {
     void navigator.clipboard?.writeText(id);
@@ -197,14 +229,11 @@ export function openUpiPaymentApp(upiId: string, upiName: string, note: string) 
   }
 
   if (isAndroidMobile()) {
-    // Full chooser for every UPI-capable app on the device
-    window.location.href = buildUpiAndroidIntentUrl(id, upiName, note);
-    // Fallback if Intent is blocked
+    window.location.href = buildUpiAndroidIntentUrl(id, upiName, note, amount);
     window.setTimeout(() => {
       if (!document.hidden) window.location.href = upiUrl;
     }, 800);
   } else {
-    // iOS / desktop: standard upi:// (OS opens whatever UPI app is registered)
     window.location.href = upiUrl;
   }
   return true;
@@ -241,8 +270,13 @@ function writeCachedQr(payload: string, dataUrl: string) {
  * Sync local UPI QR — no QuickChart, no extra network chunk.
  * Uses static qrcode import so generation is instant on first paint.
  */
-export function buildUpiQrDataUrlSync(upiId: string, upiName: string, note: string) {
-  const payload = buildUpiPaymentString(upiId, upiName, note);
+export function buildUpiQrDataUrlSync(
+  upiId: string,
+  upiName: string,
+  note: string,
+  amount?: number,
+) {
+  const payload = buildUpiPaymentString(upiId, upiName, note, amount);
   if (!upiId.trim() || !upiName.trim()) return "";
 
   const cached = readCachedQr(payload);
@@ -277,8 +311,13 @@ export function buildUpiQrDataUrlSync(upiId: string, upiName: string, note: stri
 }
 
 /** Async wrapper kept for callers; resolves immediately via sync path. */
-export async function buildUpiQrDataUrl(upiId: string, upiName: string, note: string) {
-  return buildUpiQrDataUrlSync(upiId, upiName, note);
+export async function buildUpiQrDataUrl(
+  upiId: string,
+  upiName: string,
+  note: string,
+  amount?: number,
+) {
+  return buildUpiQrDataUrlSync(upiId, upiName, note, amount);
 }
 
 function coordinatorsFromColumns(columns: Array<[string | null | undefined, string | null | undefined]>) {

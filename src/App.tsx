@@ -255,14 +255,21 @@ function App() {
     };
   }, [event.slug]);
 
-  // Sync local QR on first paint — no internet, no extra JS chunk.
+  // Sync local QR on first paint — clean UPI note only (never payment_note instructions).
   useLayoutEffect(() => {
     if (!payment.upiId || !payment.upiName) {
       setQrUrl("");
       return;
     }
-    setQrUrl(buildUpiQrDataUrlSync(payment.upiId, payment.upiName, payment.note || event.qrNote || event.name));
-  }, [payment.upiId, payment.upiName, payment.note, event.qrNote, event.name]);
+    setQrUrl(
+      buildUpiQrDataUrlSync(
+        payment.upiId,
+        payment.upiName,
+        event.qrNote || event.name,
+        payment.amount,
+      ),
+    );
+  }, [payment.upiId, payment.upiName, payment.amount, event.qrNote, event.name]);
 
   useEffect(() => {
     const title = `${event.name.toUpperCase()} — NNRG Tech Fest ${festYear}`;
@@ -681,8 +688,8 @@ Thank you! 🙏`;
             </div>
             <div className="mb-2 text-center text-[10px] font-bold uppercase tracking-[3px] text-[#6e7681]">Scan QR Code To Pay</div>
             <p className="mx-auto mb-4 max-w-md text-center text-xs leading-5 text-[#8b949e]">
-              Scan the QR with <strong style={{ color: event.accent }}>any UPI app</strong>, then enter{" "}
-              <strong style={{ color: event.accent }}>₹{payment.amount}</strong> manually before confirming payment.
+              Scan the QR with <strong style={{ color: event.accent }}>any UPI app</strong>. Amount{" "}
+              <strong style={{ color: event.accent }}>₹{payment.amount}</strong> is included in the QR.
             </p>
             <div className="mx-auto mb-7 w-fit rounded-[10px] bg-white p-3">
               {qrUrl ? (
@@ -723,9 +730,8 @@ Thank you! 🙏`;
               </div>
               <p className="mb-4 text-sm leading-6 text-[#c9d1d9]">
                 On click of the UPI ID, your phone will show <strong style={{ color: event.accent }}>all installed UPI apps</strong>
-                {" "}(GPay, PhonePe, Paytm, BHIM, Amazon Pay, bank UPI apps, etc.) — pick any one.
-                Enter <strong style={{ color: event.accent }}>₹{payment.amount}</strong> manually, then come back with your Transaction ID.
-                Prefer QR if you want to open a specific app yourself and scan.
+                {" "}— pick any one. Amount <strong style={{ color: event.accent }}>₹{payment.amount}</strong> is filled automatically.
+                Then paste your Transaction ID in the form. Prefer QR if you want to open an app and scan.
               </p>
               <div className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#6e7681]">UPI ID — tap to pay</div>
               {payment.upiId ? (
@@ -735,7 +741,8 @@ Thank you! 🙏`;
                     openUpiPaymentApp(
                       payment.upiId,
                       payment.upiName,
-                      payment.note || event.qrNote || event.name
+                      event.qrNote || event.name,
+                      payment.amount,
                     )
                   }
                   className="flex w-full items-center justify-between gap-3 rounded-xl border px-4 py-4 text-left transition active:scale-[.99]"
@@ -770,7 +777,7 @@ Thank you! 🙏`;
               {[
                 ["PHONE", payment.upiPhone || PLAIN, event.accent],
                 ["NAME", payment.upiName || PLAIN, "#FFFFFF"],
-                ["AMOUNT", `₹${payment.amount} (enter manually)`, "#22C55E"],
+                ["AMOUNT", `₹${payment.amount}`, "#22C55E"],
               ].map(([label, value, color]) => (
                 <div key={label} className="rounded-lg bg-white/5 p-4">
                   <div className="mb-1 text-[10px] uppercase tracking-[2px] text-[#6e7681]">{label}</div>
@@ -849,7 +856,7 @@ Thank you! 🙏`;
             <TextInput id="transactionId" value={form.transactionId} onChange={updateForm} placeholder="UPI Transaction ID after payment" error={errors.transactionId} label="Transaction ID *" event={event} />
 
             <div className="mb-4 border-l-[3px] px-4 py-3 text-[13px] leading-6" style={{ borderColor: event.accent, background: `${event.accent}10`, color: event.accent }}>
-              💡 Reminder: Scan QR or tap UPI ID <button type="button" className="font-bold underline decoration-dotted underline-offset-2" style={{ color: event.accent }} onClick={() => openUpiPaymentApp(payment.upiId, payment.upiName, payment.note || event.qrNote || event.name)}>{payment.upiId || PLAIN}</button>, enter <strong>₹{payment.amount}</strong> manually, then paste your Transaction ID above.
+              💡 Reminder: Scan QR or tap UPI ID <button type="button" className="font-bold underline decoration-dotted underline-offset-2" style={{ color: event.accent }} onClick={() => openUpiPaymentApp(payment.upiId, payment.upiName, event.qrNote || event.name, payment.amount)}>{payment.upiId || PLAIN}</button>, pay <strong>₹{payment.amount}</strong>, then paste your Transaction ID above.
             </div>
             <div className="mb-5 border-l-[3px] border-[#22C55E] bg-[#22C55E]/[.06] px-4 py-3 text-[13px] leading-6 text-[#22C55E]">
               🟢 After submit: Tap the green WhatsApp button
