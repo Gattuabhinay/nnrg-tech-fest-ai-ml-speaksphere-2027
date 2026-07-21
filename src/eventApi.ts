@@ -160,6 +160,56 @@ export function buildUpiPaymentString(upiId: string, upiName: string, note: stri
   return `upi://pay?${parts.join("&")}`;
 }
 
+/**
+ * Android Intent URL with NO package lock — OS shows EVERY installed app
+ * that handles UPI (GPay, PhonePe, Paytm, BHIM, Amazon Pay, bank UPI apps…).
+ * Same payment payload as the QR code.
+ */
+export function buildUpiAndroidIntentUrl(upiId: string, upiName: string, note: string) {
+  const upi = buildUpiPaymentString(upiId, upiName, note);
+  // upi://pay?... → intent://pay?...#Intent;scheme=upi;...
+  const pathAndQuery = upi.replace(/^upi:\/\//, "");
+  return (
+    `intent://${pathAndQuery}` +
+    "#Intent;scheme=upi;action=android.intent.action.VIEW;" +
+    "category=android.intent.category.BROWSABLE;end"
+  );
+}
+
+function isAndroidMobile() {
+  if (typeof navigator === "undefined") return false;
+  return /Android/i.test(navigator.userAgent);
+}
+
+/**
+ * Opens the phone's UPI app chooser (all installed UPI apps), not only 3 brands.
+ * QR still works everywhere; tap uses the same upi:// payload via OS Intent.
+ */
+export function openUpiPaymentApp(upiId: string, upiName: string, note: string) {
+  const id = upiId.trim();
+  if (!id) return false;
+  const upiUrl = buildUpiPaymentString(id, upiName, note);
+
+  try {
+    void navigator.clipboard?.writeText(id);
+  } catch {
+    /* clipboard optional */
+  }
+
+  if (isAndroidMobile()) {
+    // Full chooser for every UPI-capable app on the device
+    window.location.href = buildUpiAndroidIntentUrl(id, upiName, note);
+    // Fallback if Intent is blocked
+    window.setTimeout(() => {
+      if (!document.hidden) window.location.href = upiUrl;
+    }, 800);
+  } else {
+    // iOS / desktop: standard upi:// (OS opens whatever UPI app is registered)
+    window.location.href = upiUrl;
+  }
+  return true;
+}
+
 const upiQrMemoryCache = new Map<string, string>();
 
 function readCachedQr(payload: string) {
@@ -321,15 +371,6 @@ export function getPaymentDetails(event: SupabaseEventConfig | null, staticFee: 
     note: event?.payment_note?.trim() || "",
     fromSupabase: Boolean(event?.upi_id?.trim()),
   };
-}
-
-/** Opens PhonePe / GPay / Paytm via UPI deep link (mobile). */
-export function openUpiPaymentApp(upiId: string, upiName: string, note: string) {
-  const id = upiId.trim();
-  if (!id) return false;
-  const url = buildUpiPaymentString(id, upiName, note);
-  window.location.href = url;
-  return true;
 }
 
 export function normalizeIndianPhone(phone: string) {

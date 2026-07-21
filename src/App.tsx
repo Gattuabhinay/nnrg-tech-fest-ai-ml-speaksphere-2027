@@ -681,7 +681,8 @@ Thank you! 🙏`;
             </div>
             <div className="mb-2 text-center text-[10px] font-bold uppercase tracking-[3px] text-[#6e7681]">Scan QR Code To Pay</div>
             <p className="mx-auto mb-4 max-w-md text-center text-xs leading-5 text-[#8b949e]">
-              Scan the QR, then enter <strong style={{ color: event.accent }}>₹{payment.amount}</strong> manually in PhonePe / GPay / Paytm before confirming payment.
+              Scan the QR with <strong style={{ color: event.accent }}>any UPI app</strong>, then enter{" "}
+              <strong style={{ color: event.accent }}>₹{payment.amount}</strong> manually before confirming payment.
             </p>
             <div className="mx-auto mb-7 w-fit rounded-[10px] bg-white p-3">
               {qrUrl ? (
@@ -721,8 +722,10 @@ Thank you! 🙏`;
                 Pay via UPI
               </div>
               <p className="mb-4 text-sm leading-6 text-[#c9d1d9]">
-                On click of the UPI ID you will be redirected to your main payment application
-                (PhonePe / GPay / Paytm). Enter <strong style={{ color: event.accent }}>₹{payment.amount}</strong> manually, then come back with your Transaction ID.
+                On click of the UPI ID, your phone will show <strong style={{ color: event.accent }}>all installed UPI apps</strong>
+                {" "}(GPay, PhonePe, Paytm, BHIM, Amazon Pay, bank UPI apps, etc.) — pick any one.
+                Enter <strong style={{ color: event.accent }}>₹{payment.amount}</strong> manually, then come back with your Transaction ID.
+                Prefer QR if you want to open a specific app yourself and scan.
               </p>
               <div className="mb-2 text-[10px] font-bold uppercase tracking-[2px] text-[#6e7681]">UPI ID — tap to pay</div>
               {payment.upiId ? (
@@ -741,14 +744,14 @@ Thank you! 🙏`;
                     background: `${event.accent}22`,
                     color: event.accent,
                   }}
-                  title="Opens your UPI payment app"
+                  title="Opens the UPI app chooser on your phone"
                 >
                   <span className="break-all text-base font-black tracking-wide sm:text-lg">{payment.upiId}</span>
                   <span
                     className="shrink-0 rounded-lg px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-black"
                     style={{ background: event.accent }}
                   >
-                    Open App
+                    Choose App
                   </span>
                 </button>
               ) : (
@@ -758,7 +761,7 @@ Thank you! 🙏`;
               )}
               <p className="mt-3 text-[11px] leading-5 text-[#8b949e]">
                 {payment.fromSupabase
-                  ? "UPI ID loaded from official event settings. Works best on your phone."
+                  ? "UPI ID copied on tap. Android shows every UPI app installed on the phone. QR works with any UPI scanner."
                   : "Fetching latest UPI ID from server — tap will use the live ID once loaded."}
               </p>
             </div>
